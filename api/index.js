@@ -26,6 +26,16 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// Get all inventory products for the frontend
+app.get('/api/products', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM products');
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Test database connection route
 app.get('/api/test-db', async (req, res) => {
     try {
