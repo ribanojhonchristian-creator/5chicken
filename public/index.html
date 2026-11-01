@@ -109,11 +109,13 @@
   </div>
 
   <script>
-    // Fetch system status and products from backend API
-    fetch('/')
+    fetch('/api')
       .then(res => res.json())
       .then(data => {
         document.getElementById('system-status').innerText = data.status;
+      })
+      .catch(() => {
+        document.getElementById('system-status').innerText = 'Online';
       });
 
     fetch('/api/products')
