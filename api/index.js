@@ -2,6 +2,7 @@ import express from 'express';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,45 +11,40 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json());
 
-// Initialize SQLite database (creates a local file automatically)
+// Use /tmp directory on Vercel for writable SQLite storage, or local path for development
+const dbPath = process.env.VERCEL ? '/tmp/inventory.db' : path.join(__dirname, '../inventory.db');
+
 async function getDb() {
-    return open({
-        filename: path.join(__dirname, '../inventory.db'),
+    const db = await open({
+        filename: dbPath,
         driver: sqlite3.Database
     });
-}
 
-// Setup database tables and insert initial products automatically
-async function initDb() {
-    try {
-        const db = await getDb();
-        await db.exec(`
-            CREATE TABLE IF NOT EXISTS products (
-                product_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                item_code TEXT NOT NULL,
-                item_name TEXT NOT NULL,
-                unit_price REAL NOT NULL,
-                stock_level INTEGER NOT NULL,
-                low_stock_threshold INTEGER DEFAULT 10
-            )
+    // Create table and insert default products if they don't exist yet
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS products (
+            product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_code TEXT NOT NULL,
+            item_name TEXT NOT NULL,
+            unit_price REAL NOT NULL,
+            stock_level INTEGER NOT NULL,
+            low_stock_threshold INTEGER DEFAULT 10
+        )
+    `);
+
+    const existing = await db.all('SELECT * FROM products');
+    if (existing.length === 0) {
+        await db.run(`
+            INSERT INTO products (item_code, item_name, unit_price, stock_level, low_stock_threshold) 
+            VALUES 
+            ('WC01', 'Whole Chicken', 380.00, 25, 5),
+            ('CP01', 'Chicken Piece (1pc)', 85.00, 50, 10),
+            ('GR01', 'Gravy (Regular)', 25.00, 40, 10)
         `);
-
-        // Check if products already exist, if not, insert them
-        const existing = await db.all('SELECT * FROM products');
-        if (existing.length === 0) {
-            await db.run(`
-                INSERT INTO products (item_code, item_name, unit_price, stock_level, low_stock_threshold) 
-                VALUES 
-                ('WC01', 'Whole Chicken', 380.00, 25, 5),
-                ('CP01', 'Chicken Piece (1pc)', 85.00, 50, 10),
-                ('GR01', 'Gravy (Regular)', 25.00, 40, 10)
-            `);
-        }
-    } catch (err) {
-        console.error('Database initialization error:', err);
     }
+
+    return db;
 }
-initDb();
 
 // Serve your frontend index.html file at the home page
 app.get('/', (req, res) => {
