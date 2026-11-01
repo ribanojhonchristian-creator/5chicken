@@ -1,9 +1,17 @@
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.use(express.json());
 
+// Serve static frontend files from the public folder
+app.use(express.static(path.join(__dirname, '../public')));
+
+// API status route
 app.get('/api', (req, res) => {
   res.json({
     system: '5 STAR Chicken Inventory System',
@@ -13,6 +21,7 @@ app.get('/api', (req, res) => {
   });
 });
 
+// Products inventory route
 app.get('/api/products', (req, res) => {
   res.json([
     { id: 1, item_code: 'A01', item_name: 'Whole Chicken', unit_price: 180, stock_level: 50, low_stock_threshold: 10 },
