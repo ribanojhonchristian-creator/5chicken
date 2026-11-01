@@ -4,7 +4,6 @@ const mysql = require('mysql2/promise');
 const app = express();
 app.use(express.json());
 
-// Database connection pool
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
@@ -16,7 +15,6 @@ const pool = mysql.createPool({
     }
 });
 
-// Example route to test your cloud database connection
 app.get('/api/test-db', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT 1 + 1 AS solution');
@@ -26,7 +24,4 @@ app.get('/api/test-db', async (req, res) => {
     }
 });
 
-// Add your other inventory and sales routes here...
-
-// Export the Express app for Vercel serverless functions
 module.exports = app;
