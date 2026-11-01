@@ -4,8 +4,27 @@ const app = express();
 
 app.use(express.json());
 
-// Main HTML Page with Embedded Dashboard & Styles
+// Main HTML Page with Embedded Products Data & Styles
 app.get('/', (req, res) => {
+  const products = [
+    { id: 1, item_code: 'A01', item_name: 'Whole Chicken', unit_price: 180, stock_level: 50, low_stock_threshold: 10 },
+    { id: 2, item_code: 'A02', item_name: 'Chicken Wings (1kg)', unit_price: 160, stock_level: 30, low_stock_threshold: 5 },
+    { id: 3, item_code: 'A03', item_name: 'Gravy Sauce (Pack)', unit_price: 25, stock_level: 4, low_stock_threshold: 10 }
+  ];
+
+  const rows = products.map(p => {
+    const isLow = p.stock_level <= p.low_stock_threshold;
+    return `
+      <tr>
+        <td>${p.item_code}</td>
+        <td>${p.item_name}</td>
+        <td>₱${p.unit_price}</td>
+        <td>${p.stock_level}</td>
+        <td>${isLow ? '<span class="badge">Low Stock</span>' : '<span style="color:#22c55e;">In Stock</span>'}</td>
+      </tr>
+    `;
+  }).join('');
+
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -111,48 +130,31 @@ app.get('/', (req, res) => {
         </tr>
       </thead>
       <tbody>
-        <tr><td colspan="5" style="text-align:center;">Loading products from server...</td></tr>
+        ${rows}
       </tbody>
     </table>
   </div>
-
-  <script>
-    fetch('/api/products')
-      .then(res => res.json())
-      .then(products => {
-        const tbody = document.querySelector('#product-table tbody');
-        tbody.innerHTML = '';
-        products.forEach(p => {
-          const isLow = p.stock_level <= p.low_stock_threshold;
-          const tr = document.createElement('tr');
-          tr.innerHTML = \`
-            <td>\${p.item_code}</td>
-            <td>\${p.item_name}</td>
-            <td>₱\${p.unit_price}</td>
-            <td>\${p.stock_level}</td>
-            <td>\${isLow ? '<span class="badge">Low Stock</span>' : '<span style="color:#22c55e;">In Stock</span>'}</td>
-          \`;
-          tbody.appendChild(tr);
-        });
-      })
-      .catch(err => {
-        document.querySelector('#product-table tbody tr td').innerText = 'Failed to load products.';
-      });
-  </script>
 </body>
 </html>`);
 });
 
-// Products API route (supporting both with and without /api prefix for Vercel functions)
-const getProducts = (req, res) => {
+// API status route
+app.get('/api', (req, res) => {
+  res.json({
+    system: '5 STAR Chicken Inventory System',
+    status: 'Online',
+    developers: ['Lopez Mark John', 'Naig, Gabriel', 'Tomagan, Sidrey', 'Ribano Jhonchristian'],
+    section: 'BSIT/LFSA211A015'
+  });
+});
+
+// Products API route
+app.get('/api/products', (req, res) => {
   res.json([
     { id: 1, item_code: 'A01', item_name: 'Whole Chicken', unit_price: 180, stock_level: 50, low_stock_threshold: 10 },
     { id: 2, item_code: 'A02', item_name: 'Chicken Wings (1kg)', unit_price: 160, stock_level: 30, low_stock_threshold: 5 },
     { id: 3, item_code: 'A03', item_name: 'Gravy Sauce (Pack)', unit_price: 25, stock_level: 4, low_stock_threshold: 10 }
   ]);
-};
-
-app.get('/api/products', getProducts);
-app.get('/products', getProducts);
+});
 
 export default app;
