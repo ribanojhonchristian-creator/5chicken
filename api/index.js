@@ -32,20 +32,36 @@ app.post('/api/sell', (req, res) => {
     res.json({ success: true, message: 'Stock updated successfully', product });
 });
 
-// API endpoint to add new products and stock
+// API endpoint to add new products OR restock existing items
 app.post('/api/add-product', (req, res) => {
     const { item_code, item_name, unit_price, stock_level, low_stock_threshold } = req.body;
 
-    if (!item_code || !item_name || !unit_price || stock_level === undefined) {
-        return res.status(400).json({ success: false, message: 'Please fill in all required product details.' });
+    if (!item_code || !stock_level) {
+        return res.status(400).json({ success: false, message: 'Please provide Item Code and Stock amount.' });
+    }
+
+    const code = item_code.trim().toUpperCase();
+    const addStock = parseInt(stock_level);
+    const existingProduct = products.find(p => p.item_code === code);
+
+    if (existingProduct) {
+        // If product already exists, just add to its current stock!
+        existingProduct.stock_level += addStock;
+        if (unit_price) existingProduct.unit_price = parseFloat(unit_price);
+        return res.json({ success: true, message: 'Stock added successfully!', product: existingProduct });
+    }
+
+    // Otherwise, create a brand new product
+    if (!item_name || !unit_price) {
+        return res.status(400).json({ success: false, message: 'Please provide name and price for new products.' });
     }
 
     const newProduct = {
         product_id: products.length > 0 ? Math.max(...products.map(p => p.product_id)) + 1 : 1,
-        item_code: item_code.toUpperCase(),
+        item_code: code,
         item_name,
         unit_price: parseFloat(unit_price),
-        stock_level: parseInt(stock_level),
+        stock_level: addStock,
         low_stock_threshold: low_stock_threshold ? parseInt(low_stock_threshold) : 5
     };
 
@@ -69,7 +85,6 @@ app.get('/', (req, res) => {
                 .section { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
                 .badge { background: #238636; color: white; padding: 4px 10px; border-radius: 6px; font-size: 12px; float: right; }
                 
-                /* Form Styling */
                 .add-form { background: #21262d; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #30363d; display: grid; grid-template-columns: 1fr 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
                 .add-form input { background: #0d1117; border: 1px solid #30363d; color: white; padding: 8px; border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; }
                 .add-form label { font-size: 12px; color: #8b949e; display: block; margin-bottom: 4px; }
@@ -91,26 +106,26 @@ app.get('/', (req, res) => {
                 <h1>5 STAR Chicken Inventory System</h1>
                 <div class="section">Section: BSIT/LFSA211A015</div>
 
-                <!-- Add Product Form -->
+                <!-- Add/Restock Form -->
                 <form class="add-form" onsubmit="addProduct(event)">
                     <div>
                         <label>Item Code</label>
-                        <input type="text" id="item_code" placeholder="e.g. SP01" required>
+                        <input type="text" id="item_code" placeholder="e.g. WC01" required>
                     </div>
                     <div>
-                        <label>Product Name</label>
-                        <input type="text" id="item_name" placeholder="e.g. Spicy Wings" required>
+                        <label>Product Name (Optional if restock)</label>
+                        <input type="text" id="item_name" placeholder="Whole Chicken">
                     </div>
                     <div>
                         <label>Unit Price (₱)</label>
-                        <input type="number" step="0.01" id="unit_price" placeholder="120.00" required>
+                        <input type="number" step="0.01" id="unit_price" placeholder="380.00">
                     </div>
                     <div>
-                        <label>Stock Level</label>
-                        <input type="number" id="stock_level" placeholder="30" required>
+                        <label>Stock to Add</label>
+                        <input type="number" id="stock_level" placeholder="10" required>
                     </div>
                     <div>
-                        <button type="submit" class="add-btn">Add Item</button>
+                        <button type="submit" class="add-btn">Save</button>
                     </div>
                 </form>
                 
@@ -182,7 +197,7 @@ app.get('/', (req, res) => {
                         document.getElementById('item_name').value = '';
                         document.getElementById('unit_price').value = '';
                         document.getElementById('stock_level').value = '';
-                        loadProducts(); // Refresh table to show new product!
+                        loadProducts(); 
                     } else {
                         alert(data.message);
                     }
