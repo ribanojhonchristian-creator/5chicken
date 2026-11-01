@@ -1,9 +1,10 @@
-const express = require('express');
-const mysql = require('mysql2/promise');
+import express from 'express';
+import mysql from 'mysql2/promise';
 
 const app = express();
 app.use(express.json());
 
+// Database connection pool pointing to your Aiven Cloud MySQL
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
@@ -15,6 +16,7 @@ const pool = mysql.createPool({
     }
 });
 
+// Test database connection route
 app.get('/api/test-db', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT 1 + 1 AS solution');
@@ -24,4 +26,5 @@ app.get('/api/test-db', async (req, res) => {
     }
 });
 
-module.exports = app;
+// Export the Express app for Vercel Serverless Functions
+export default app;
