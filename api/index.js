@@ -9,13 +9,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json());
 
-// Database connection pool pointing to your Aiven Cloud MySQL
+// Database connection pool with extended timeout for Vercel & Aiven
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     port: process.env.DB_PORT || 3306,
+    connectTimeout: 30000, // 30 seconds timeout
     ssl: { 
         rejectUnauthorized: false 
     }
@@ -36,7 +37,7 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// Temporary route to create table and insert products into Aiven Cloud MySQL
+// Setup route to create tables and insert products automatically
 app.get('/api/setup-db', async (req, res) => {
     try {
         await pool.query(`
@@ -58,17 +59,7 @@ app.get('/api/setup-db', async (req, res) => {
             ('GR01', 'Gravy (Regular)', 25.00, 40, 10)
         `);
 
-        res.json({ success: true, message: 'Products table created and items inserted successfully into Aiven!' });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// Test database connection route
-app.get('/api/test-db', async (req, res) => {
-    try {
-        const [rows] = await pool.query('SELECT 1 + 1 AS solution');
-        res.json({ success: true, message: 'Connected to Aiven Cloud MySQL!', solution: rows[0].solution });
+        res.json({ success: true, message: 'Products table created and items inserted successfully!' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
