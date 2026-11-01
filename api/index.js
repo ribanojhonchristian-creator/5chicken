@@ -1,5 +1,10 @@
 import express from 'express';
 import mysql from 'mysql2/promise';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
@@ -14,6 +19,11 @@ const pool = mysql.createPool({
     ssl: { 
         rejectUnauthorized: false 
     }
+});
+
+// Serve your frontend index.html file at the home page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 // Test database connection route
