@@ -4,27 +4,7 @@ const app = express();
 
 app.use(express.json());
 
-let products = [
-  { id: 1, item_code: 'A01', item_name: 'Whole Chicken', unit_price: 180, stock_level: 50, low_stock_threshold: 10 },
-  { id: 2, item_code: 'A02', item_name: 'Chicken Wings (1kg)', unit_price: 160, stock_level: 30, low_stock_threshold: 5 },
-  { id: 3, item_code: 'A03', item_name: 'Gravy Sauce (Pack)', unit_price: 25, stock_level: 50, low_stock_threshold: 10 }
-];
-
 app.get('/', (req, res) => {
-  const rows = products.map(p => {
-    const isLow = p.stock_level <= p.low_stock_threshold;
-    return `
-      <tr>
-        <td>${p.item_code}</td>
-        <td>${p.item_name}</td>
-        <td>₱${p.unit_price}</td>
-        <td id="stock-${p.id}">${p.stock_level}</td>
-        <td id="status-${p.id}">${isLow ? '<span class="badge">Low Stock</span>' : '<span style="color:#22c55e;">In Stock</span>'}</td>
-        <td><button onclick="buyProduct(${p.id})" style="background:#f59e0b; color:#0f172a; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">Buy 1</button></td>
-      </tr>
-    `;
-  }).join('');
-
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -104,6 +84,18 @@ app.get('/', (req, res) => {
       border-radius: 4px;
       font-size: 12px;
     }
+    button {
+      background: #f59e0b;
+      color: #0f172a;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body>
@@ -130,51 +122,51 @@ app.get('/', (req, res) => {
           <th>Action</th>
         </tr>
       </thead>
-      <tbody>
-        ${rows}
+      <tbody id="table-body">
+        <tr><td colspan="6" style="text-align:center;">Loading products...</td></tr>
       </tbody>
     </table>
   </div>
 
   <script>
-    function buyProduct(id) {
-      fetch('/api/buy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: id })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if(data.success) {
-          const product = data.product;
-          document.getElementById('stock-' + product.id).innerText = product.stock_level;
-          const statusCell = document.getElementById('status-' + product.id);
-          if(product.stock_level <= product.low_stock_threshold) {
-            statusCell.innerHTML = '<span class="badge">Low Stock</span>';
-          } else {
-            statusCell.innerHTML = '<span style="color:#22c55e;">In Stock</span>';
-          }
-        } else {
-          alert(data.message);
-        }
+    let products = [
+      { id: 1, item_code: 'A01', item_name: 'Whole Chicken', unit_price: 180, stock_level: 50, low_stock_threshold: 10 },
+      { id: 2, item_code: 'A02', item_name: 'Chicken Wings (1kg)', unit_price: 160, stock_level: 30, low_stock_threshold: 5 },
+      { id: 3, item_code: 'A03', item_name: 'Gravy Sauce (Pack)', unit_price: 25, stock_level: 50, low_stock_threshold: 10 }
+    ];
+
+    function renderTable() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+      products.forEach(p => {
+        const isLow = p.stock_level <= p.low_stock_threshold;
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td>\${p.item_code}</td>
+          <td>\${p.item_name}</td>
+          <td>₱\${p.unit_price}</td>
+          <td>\${p.stock_level}</td>
+          <td>\${isLow ? '<span class="badge">Low Stock</span>' : '<span style="color:#22c55e;">In Stock</span>'}</td>
+          <td><button onclick="buyProduct(\${p.id})">Buy 1</button></td>
+        \`;
+        tbody.appendChild(tr);
       });
     }
+
+    function buyProduct(id) {
+      const product = products.find(p => p.id === id);
+      if (product && product.stock_level > 0) {
+        product.stock_level -= 1;
+        renderTable();
+      } else {
+        alert('Out of stock!');
+      }
+    }
+
+    renderTable();
   </script>
 </body>
 </html>`);
-});
-
-app.post('/api/buy', (req, res) => {
-  const { id } = req.body;
-  const product = products.find(p => p.id === id);
-  if (!product) {
-    return res.status(404).json({ success: false, message: 'Product not found' });
-  }
-  if (product.stock_level <= 0) {
-    return res.json({ success: false, message: 'Out of stock!' });
-  }
-  product.stock_level -= 1;
-  res.json({ success: true, product });
 });
 
 app.get('/api', (req, res) => {
@@ -187,7 +179,11 @@ app.get('/api', (req, res) => {
 });
 
 app.get('/api/products', (req, res) => {
-  res.json(products);
+  res.json([
+    { id: 1, item_code: 'A01', item_name: 'Whole Chicken', unit_price: 180, stock_level: 50, low_stock_threshold: 10 },
+    { id: 2, item_code: 'A02', item_name: 'Chicken Wings (1kg)', unit_price: 160, stock_level: 30, low_stock_threshold: 5 },
+    { id: 3, item_code: 'A03', item_name: 'Gravy Sauce (Pack)', unit_price: 25, stock_level: 50, low_stock_threshold: 10 }
+  ]);
 });
 
 export default app;
