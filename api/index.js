@@ -3,19 +3,26 @@ import express from 'express';
 const app = express();
 app.use(express.json());
 
-// Persistent in-memory product list for Vercel
+// Persistent in-memory data for Vercel
 let products = [
     { product_id: 1, item_code: 'WC01', item_name: 'Whole Chicken', unit_price: 380.00, stock_level: 25, low_stock_threshold: 5 },
     { product_id: 2, item_code: 'CP01', item_name: 'Chicken Piece (1pc)', unit_price: 85.00, stock_level: 50, low_stock_threshold: 10 },
     { product_id: 3, item_code: 'GR01', item_name: 'Gravy (Regular)', unit_price: 25.00, stock_level: 40, low_stock_threshold: 10 }
 ];
 
+let salesRecords = [];
+
 // API endpoint to get products
 app.get('/api/products', (req, res) => {
     res.json(products);
 });
 
-// API endpoint to buy/reduce stock
+// API endpoint to get sales records
+app.get('/api/sales', (req, res) => {
+    res.json(salesRecords);
+});
+
+// API endpoint to buy/reduce stock & record transaction
 app.post('/api/sell', (req, res) => {
     const { product_id, quantity = 1 } = req.body;
     const product = products.find(p => p.product_id === product_id);
@@ -29,7 +36,18 @@ app.post('/api/sell', (req, res) => {
     }
 
     product.stock_level -= quantity;
-    res.json({ success: true, message: 'Stock updated successfully', product });
+    
+    // Record the sale
+    const sale = {
+        transaction_id: salesRecords.length + 1,
+        item_name: product.item_name,
+        quantity: quantity,
+        total_amount: product.unit_price * quantity,
+        timestamp: new Date().toLocaleString()
+    };
+    salesRecords.unshift(sale); // Add newest sale to the top
+
+    res.json({ success: true, message: 'Sale recorded successfully', product, sale });
 });
 
 // API endpoint to add new products OR restock existing items
@@ -45,13 +63,11 @@ app.post('/api/add-product', (req, res) => {
     const existingProduct = products.find(p => p.item_code === code);
 
     if (existingProduct) {
-        // If product already exists, just add to its current stock!
         existingProduct.stock_level += addStock;
         if (unit_price) existingProduct.unit_price = parseFloat(unit_price);
         return res.json({ success: true, message: 'Stock added successfully!', product: existingProduct });
     }
 
-    // Otherwise, create a brand new product
     if (!item_name || !unit_price) {
         return res.status(400).json({ success: false, message: 'Please provide name and price for new products.' });
     }
@@ -80,8 +96,9 @@ app.get('/', (req, res) => {
             <title>5 STAR Chicken Inventory System</title>
             <style>
                 body { background-color: #0d1117; color: #c9d1d9; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-                .container { background: #161b22; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 900px; border: 1px solid #30363d; }
+                .container { background: #161b22; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 950px; border: 1px solid #30363d; }
                 h1 { color: #f0883e; font-size: 22px; margin-bottom: 5px; }
+                h2 { margin-top: 30px; font-size: 18px; color: #58a6ff; }
                 .section { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
                 .badge { background: #238636; color: white; padding: 4px 10px; border-radius: 6px; font-size: 12px; float: right; }
                 
@@ -91,9 +108,9 @@ app.get('/', (req, res) => {
                 .add-btn { background: #1f6feb; color: white; border: none; padding: 9px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; height: 37px; }
                 .add-btn:hover { background: #388bfd; }
 
-                table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                th, td { padding: 12px; text-align: left; border-bottom: 1px solid #30363d; }
-                th { color: #f0883e; font-size: 14px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #30363d; font-size: 14px; }
+                th { color: #f0883e; font-size: 13px; }
                 .in-stock { color: #3fb950; font-weight: bold; }
                 .low-stock { color: #f85149; font-weight: bold; }
                 .buy-btn { background: #238636; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -113,7 +130,7 @@ app.get('/', (req, res) => {
                         <input type="text" id="item_code" placeholder="e.g. WC01" required>
                     </div>
                     <div>
-                        <label>Product Name (Optional if restock)</label>
+                        <label>Product Name (Optional)</label>
                         <input type="text" id="item_name" placeholder="Whole Chicken">
                     </div>
                     <div>
@@ -121,7 +138,7 @@ app.get('/', (req, res) => {
                         <input type="number" step="0.01" id="unit_price" placeholder="380.00">
                     </div>
                     <div>
-                        <label>Stock to Add</label>
+                        <label>Stock / Add</label>
                         <input type="number" id="stock_level" placeholder="10" required>
                     </div>
                     <div>
@@ -145,13 +162,30 @@ app.get('/', (req, res) => {
                         <tr><td colspan="6" style="text-align:center;">Loading products...</td></tr>
                     </tbody>
                 </table>
+
+                <h2>Sales Transaction History</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tx ID</th>
+                            <th>Item Name</th>
+                            <th>Qty</th>
+                            <th>Total Amount (₱)</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table-body">
+                        <tr><td colspan="5" style="text-align:center;">No sales recorded yet.</td></tr>
+                    </tbody>
+                </table>
             </div>
 
             <script>
-                async function loadProducts() {
+                async function loadData() {
                     try {
-                        const res = await fetch('/api/products');
-                        const products = await res.json();
+                        // Load Products
+                        const prodRes = await fetch('/api/products');
+                        const products = await prodRes.json();
                         const tbody = document.getElementById('product-table-body');
                         tbody.innerHTML = '';
 
@@ -173,8 +207,30 @@ app.get('/', (req, res) => {
                                 </tr>
                             \`;
                         });
+
+                        // Load Sales Records
+                        const salesRes = await fetch('/api/sales');
+                        const sales = await salesRes.json();
+                        const salesTbody = document.getElementById('sales-table-body');
+                        
+                        if (sales.length === 0) {
+                            salesTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8b949e;">No sales recorded yet.</td></tr>';
+                        } else {
+                            salesTbody.innerHTML = '';
+                            sales.forEach(s => {
+                                salesTbody.innerHTML += \`
+                                    <tr>
+                                        <td>#\${s.transaction_id}</td>
+                                        <td>\${s.item_name}</td>
+                                        <td>\${s.quantity}</td>
+                                        <td>₱\${s.total_amount.toFixed(2)}</td>
+                                        <td>\${s.timestamp}</td>
+                                    </tr>
+                                \`;
+                            });
+                        }
                     } catch (err) {
-                        console.error('Error loading products:', err);
+                        console.error('Error loading data:', err);
                     }
                 }
 
@@ -197,7 +253,7 @@ app.get('/', (req, res) => {
                         document.getElementById('item_name').value = '';
                         document.getElementById('unit_price').value = '';
                         document.getElementById('stock_level').value = '';
-                        loadProducts(); 
+                        loadData(); 
                     } else {
                         alert(data.message);
                     }
@@ -211,13 +267,13 @@ app.get('/', (req, res) => {
                     });
                     const data = await res.json();
                     if (data.success) {
-                        loadProducts(); 
+                        loadData(); 
                     } else {
                         alert(data.message);
                     }
                 }
 
-                loadProducts();
+                loadData();
             </script>
         </body>
         </html>
