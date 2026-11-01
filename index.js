@@ -137,7 +137,6 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// API status route
 app.get('/api', (req, res) => {
   res.json({
     system: '5 STAR Chicken Inventory System',
