@@ -36,6 +36,34 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
+// Temporary route to create table and insert products into Aiven Cloud MySQL
+app.get('/api/setup-db', async (req, res) => {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS products (
+                product_id INT AUTO_INCREMENT PRIMARY KEY,
+                item_code VARCHAR(50) NOT NULL,
+                item_name VARCHAR(100) NOT NULL,
+                unit_price DECIMAL(10,2) NOT NULL,
+                stock_level INT NOT NULL,
+                low_stock_threshold INT DEFAULT 10
+            )
+        `);
+
+        await pool.query(`
+            INSERT INTO products (item_code, item_name, unit_price, stock_level, low_stock_threshold) 
+            VALUES 
+            ('WC01', 'Whole Chicken', 380.00, 25, 5),
+            ('CP01', 'Chicken Piece (1pc)', 85.00, 50, 10),
+            ('GR01', 'Gravy (Regular)', 25.00, 40, 10)
+        `);
+
+        res.json({ success: true, message: 'Products table created and items inserted successfully into Aiven!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Test database connection route
 app.get('/api/test-db', async (req, res) => {
     try {
