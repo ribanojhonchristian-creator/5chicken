@@ -1,9 +1,17 @@
 import express from 'express';
+import session from 'express-session';
 
 const app = express();
 app.use(express.json());
 
-// Persistent in-memory data for Vercel
+// Configure session middleware
+app.use(session({
+    secret: '5star_chicken_secret_key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false }
+}));
+
 let products = [
     { product_id: 1, item_code: 'WC01', item_name: 'Whole Chicken', unit_price: 380.00, stock_level: 25, low_stock_threshold: 5 },
     { product_id: 2, item_code: 'CP01', item_name: 'Chicken Piece (1pc)', unit_price: 85.00, stock_level: 50, low_stock_threshold: 10 },
@@ -12,18 +20,55 @@ let products = [
 
 let salesRecords = [];
 
-// API endpoint to get products
+// --- Authentication Routes ---
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    if (username === 'admin' && password === 'admin123') {
+        req.session.isAuthenticated = true;
+        req.session.username = username;
+        return res.json({ success: true, message: 'Logged in successfully!' });
+    }
+    
+    res.status(401).json({ success: false, message: 'Invalid username or password!' });
+});
+
+app.post('/api/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'Could not log out.' });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ success: true, message: 'Logged out successfully!' });
+    });
+});
+
+app.get('/api/check-auth', (req, res) => {
+    if (req.session && req.session.isAuthenticated) {
+        return res.json({ isAuthenticated: true, username: req.session.username });
+    }
+    res.json({ isAuthenticated: false });
+});
+
+// Middleware to protect routes
+function requireAuth(req, res, next) {
+    if (req.session && req.session.isAuthenticated) {
+        return next();
+    }
+    res.status(401).json({ success: false, message: 'Unauthorized! Please log in first.' });
+}
+
+// Public Routes
 app.get('/api/products', (req, res) => {
     res.json(products);
 });
 
-// API endpoint to get sales records
 app.get('/api/sales', (req, res) => {
     res.json(salesRecords);
 });
 
-// API endpoint to buy/reduce stock & record transaction
-app.post('/api/sell', (req, res) => {
+// Protected Routes
+app.post('/api/sell', requireAuth, (req, res) => {
     const { product_id, quantity = 1 } = req.body;
     const product = products.find(p => p.product_id === product_id);
 
@@ -37,7 +82,6 @@ app.post('/api/sell', (req, res) => {
 
     product.stock_level -= quantity;
     
-    // Record the sale
     const sale = {
         transaction_id: salesRecords.length + 1,
         item_name: product.item_name,
@@ -45,13 +89,12 @@ app.post('/api/sell', (req, res) => {
         total_amount: product.unit_price * quantity,
         timestamp: new Date().toLocaleString()
     };
-    salesRecords.unshift(sale); // Add newest sale to the top
+    salesRecords.unshift(sale);
 
     res.json({ success: true, message: 'Sale recorded successfully', product, sale });
 });
 
-// API endpoint to add new products OR restock existing items
-app.post('/api/add-product', (req, res) => {
+app.post('/api/add-product', requireAuth, (req, res) => {
     const { item_code, item_name, unit_price, stock_level, low_stock_threshold } = req.body;
 
     if (!item_code || !stock_level) {
@@ -85,7 +128,7 @@ app.post('/api/add-product', (req, res) => {
     res.json({ success: true, message: 'Product added successfully!', product: newProduct });
 });
 
-// Serve the full HTML dashboard directly
+// Main HTML & Frontend Route
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -97,11 +140,24 @@ app.get('/', (req, res) => {
             <style>
                 body { background-color: #0d1117; color: #c9d1d9; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
                 .container { background: #161b22; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 950px; border: 1px solid #30363d; }
-                h1 { color: #f0883e; font-size: 22px; margin-bottom: 5px; }
+                .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+                h1 { color: #f0883e; font-size: 22px; margin: 0; }
                 h2 { margin-top: 30px; font-size: 18px; color: #58a6ff; }
                 .section { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
-                .badge { background: #238636; color: white; padding: 4px 10px; border-radius: 6px; font-size: 12px; float: right; }
+                .badge { background: #238636; color: white; padding: 4px 10px; border-radius: 6px; font-size: 12px; }
                 
+                .auth-container { display: flex; gap: 10px; align-items: center; }
+                .auth-btn { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+                .auth-btn:hover { background: #30363d; }
+                .logout-btn { background: #da3633; color: white; border: none; }
+                .logout-btn:hover { background: #f85149; }
+
+                /* Login Modal Styling */
+                .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; }
+                .modal-content { background: #161b22; padding: 25px; border-radius: 10px; border: 1px solid #30363d; width: 300px; }
+                .modal-content input { width: 100%; padding: 8px; margin: 10px 0; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 6px; box-sizing: border-box; }
+                .modal-content button { width: 100%; padding: 8px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+
                 .add-form { background: #21262d; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #30363d; display: grid; grid-template-columns: 1fr 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
                 .add-form input { background: #0d1117; border: 1px solid #30363d; color: white; padding: 8px; border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; }
                 .add-form label { font-size: 12px; color: #8b949e; display: block; margin-bottom: 4px; }
@@ -115,36 +171,48 @@ app.get('/', (req, res) => {
                 .low-stock { color: #f85149; font-weight: bold; }
                 .buy-btn { background: #238636; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; }
                 .buy-btn:hover { background: #2ea043; }
+                .disabled-notice { color: #8b949e; font-style: italic; font-size: 13px; }
             </style>
         </head>
         <body>
             <div class="container">
-                <span class="badge">Online</span>
-                <h1>5 STAR Chicken Inventory System</h1>
-                <div class="section">Section: BSIT/LFSA211A015</div>
+                <div class="header-top">
+                    <div>
+                        <h1>5 STAR Chicken Inventory System</h1>
+                        <div class="section" style="margin-bottom:0;">Section: BSIT/LFSA211A015</div>
+                    </div>
+                    <div class="auth-container">
+                        <span class="badge">Online</span>
+                        <div id="auth-actions">
+                            <button class="auth-btn" onclick="openLoginModal()">Login</button>
+                        </div>
+                    </div>
+                </div>
 
-                <!-- Add/Restock Form -->
-                <form class="add-form" onsubmit="addProduct(event)">
-                    <div>
-                        <label>Item Code</label>
-                        <input type="text" id="item_code" placeholder="e.g. WC01" required>
-                    </div>
-                    <div>
-                        <label>Product Name (Optional)</label>
-                        <input type="text" id="item_name" placeholder="Whole Chicken">
-                    </div>
-                    <div>
-                        <label>Unit Price (₱)</label>
-                        <input type="number" step="0.01" id="unit_price" placeholder="380.00">
-                    </div>
-                    <div>
-                        <label>Stock / Add</label>
-                        <input type="number" id="stock_level" placeholder="10" required>
-                    </div>
-                    <div>
-                        <button type="submit" class="add-btn">Save</button>
-                    </div>
-                </form>
+                <!-- Add/Restock Form (Hidden if not logged in) -->
+                <div id="restricted-form-container" style="display: none; margin-top: 20px;">
+                    <form class="add-form" onsubmit="addProduct(event)">
+                        <div>
+                            <label>Item Code</label>
+                            <input type="text" id="item_code" placeholder="e.g. WC01" required>
+                        </div>
+                        <div>
+                            <label>Product Name (Optional)</label>
+                            <input type="text" id="item_name" placeholder="Whole Chicken">
+                        </div>
+                        <div>
+                            <label>Unit Price (₱)</label>
+                            <input type="number" step="0.01" id="unit_price" placeholder="380.00">
+                        </div>
+                        <div>
+                            <label>Stock / Add</label>
+                            <input type="number" id="stock_level" placeholder="10" required>
+                        </div>
+                        <div>
+                            <button type="submit" class="add-btn">Save</button>
+                        </div>
+                    </form>
+                </div>
                 
                 <h2>Live Inventory Products</h2>
                 <table>
@@ -180,7 +248,84 @@ app.get('/', (req, res) => {
                 </table>
             </div>
 
+            <!-- Login Modal -->
+            <div id="loginModal" class="modal">
+                <div class="modal-content">
+                    <h3 style="color: #f0883e; margin-top:0;">Admin Login</h3>
+                    <form onsubmit="handleLogin(event)">
+                        <label style="font-size:12px; color:#8b949e;">Username</label>
+                        <input type="text" id="login-username" required placeholder="admin">
+                        <label style="font-size:12px; color:#8b949e;">Password</label>
+                        <input type="password" id="login-password" required placeholder="admin123">
+                        <button type="submit" style="margin-top: 10px;">Sign In</button>
+                        <button type="button" class="auth-btn" onclick="closeLoginModal()" style="width:100%; margin-top:6px; background:#30363d;">Cancel</button>
+                    </form>
+                </div>
+            </div>
+
             <script>
+                let isLoggedIn = false;
+
+                async function checkAuthStatus() {
+                    try {
+                        const res = await fetch('/api/check-auth');
+                        const data = await res.json();
+                        isLoggedIn = data.isAuthenticated;
+                        
+                        const authActions = document.getElementById('auth-actions');
+                        const restrictedForm = document.getElementById('restricted-form-container');
+
+                        if (isLoggedIn) {
+                            authActions.innerHTML = \`<button class="auth-btn logout-btn" onclick="handleLogout()">Logout (\${data.username})</button>\`;
+                            restrictedForm.style.display = 'block';
+                        } else {
+                            authActions.innerHTML = \`<button class="auth-btn" onclick="openLoginModal()">Login</button>\`;
+                            restrictedForm.style.display = 'none';
+                        }
+                        loadData();
+                    } catch (err) {
+                        console.error('Auth check error:', err);
+                    }
+                }
+
+                function openLoginModal() {
+                    document.getElementById('loginModal').style.display = 'flex';
+                }
+
+                function closeLoginModal() {
+                    document.getElementById('loginModal').style.display = 'none';
+                }
+
+                async function handleLogin(event) {
+                    event.preventDefault();
+                    const username = document.getElementById('login-username').value;
+                    const password = document.getElementById('login-password').value;
+
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        closeLoginModal();
+                        checkAuthStatus();
+                    } else {
+                        alert(data.message);
+                    }
+                }
+
+                async function handleLogout() {
+                    const res = await fetch('/api/logout', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        checkAuthStatus();
+                    } else {
+                        alert(data.message);
+                    }
+                }
+
                 async function loadData() {
                     try {
                         // Load Products
@@ -194,6 +339,10 @@ app.get('/', (req, res) => {
                             const statusText = isLow ? 'Low Stock' : 'In Stock';
                             const statusClass = isLow ? 'low-stock' : 'in-stock';
 
+                            const actionCell = isLoggedIn 
+                                ? \`<button class="buy-btn" onclick="buyProduct(\${p.product_id})">Buy (1)</button>\`
+                                : \`<span class="disabled-notice">Login to Buy</span>\`;
+
                             tbody.innerHTML += \`
                                 <tr>
                                     <td>\${p.item_code}</td>
@@ -201,9 +350,7 @@ app.get('/', (req, res) => {
                                     <td>₱\${p.unit_price.toFixed(2)}</td>
                                     <td>\${p.stock_level}</td>
                                     <td><span class="\${statusClass}">\${statusText}</span></td>
-                                    <td>
-                                        <button class="buy-btn" onclick="buyProduct(\${p.product_id})">Buy (1)</button>
-                                    </td>
+                                    <td>\${actionCell}</td>
                                 </tr>
                             \`;
                         });
@@ -273,7 +420,8 @@ app.get('/', (req, res) => {
                     }
                 }
 
-                loadData();
+                // Initialize auth status on page load
+                checkAuthStatus();
             </script>
         </body>
         </html>
